@@ -1,0 +1,14 @@
+﻿node_modules/
+dist/
+dist-ssr/
+*.local
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+*.log
+.DS_Store
+coverage/
+.vite/
+*.tsbuildinfo
+
+.cursor/hooks/.cache/
