@@ -2,7 +2,6 @@ import type {
   CollectionTask,
   DashboardSummary,
   DataSlice,
-  DeliveryDataset,
   EventItem,
   FunnelItem,
   OperatorLatency,
@@ -14,6 +13,9 @@ import type {
   WorkerNode,
 } from '@/types'
 import type { QcDataStatus, QualityLevel, SceneCode } from '@/types'
+import { lerobotDatasets, toDeliveryDataset } from '@/mocks/lerobotDatasets'
+
+export { lerobotDatasets, findLerobotDataset } from '@/mocks/lerobotDatasets'
 
 /** Mock 数据 —— 后期接真实 API 时，只需改 api/*.ts，不必改页面 */
 
@@ -426,31 +428,39 @@ export function getOrCreateQcDetailExtra(id: string, pkg: QcPackage): import('@/
   qcDetailExtras[id] = extra
   return extra
 }
-export const datasets: DeliveryDataset[] = [
-  {
-    id: 'ds-pen',
-    name: 'black_pen_to_wooden_stand',
-    task: 'Pick up the black_pen and place it on the wooden_stand.',
-    version: 'v2.1',
-    episodes: 20,
-    frames: 15668,
-    videos: 60,
-    fps: 30,
-    robotType: 'aloha',
-    path: '../black_pen_to_wooden_stand/lerobot_data',
-    qcStatus: 'pending',
-  },
-  {
-    id: 'ds-mouse',
-    name: 'black_mouse_to_wooden_stand',
-    task: 'Pick up the black mouse and put it on the wooden stand.',
-    version: 'v2.1',
-    episodes: 20,
-    frames: 16423,
-    videos: 60,
-    fps: 30,
-    robotType: 'aloha',
-    path: '../black_mouse_to_wooden_stand/lerobot_data',
-    qcStatus: 'passed',
-  },
-]
+
+export function toQcSession(extra: import('@/types').QcDetailExtra): import('@/types').QcSession {
+  return {
+    inspector: extra.inspector,
+    durationSec: extra.durationSec,
+    fps: extra.fps,
+    lockKey: extra.lockKey,
+    manualEdits: extra.manualEdits,
+    lowConfidenceCount: extra.lowConfidenceCount,
+  }
+}
+
+export function toQcAnnotations(extra: import('@/types').QcDetailExtra): import('@/types').QcAnnotations {
+  return {
+    tags: extra.tags,
+    issues: extra.issues,
+    qualitySegments: extra.qualitySegments,
+  }
+}
+
+export function saveQcAnnotations(
+  id: string,
+  pkg: QcPackage,
+  payload: import('@/types').QcAnnotationsUpdate,
+): import('@/types').QcAnnotations {
+  const extra = getOrCreateQcDetailExtra(id, pkg)
+  extra.tags = payload.tags
+  extra.issues = payload.issues
+  extra.qualitySegments = payload.qualitySegments
+  extra.manualEdits += 1
+  pkg.tagCount = payload.tags.length
+  pkg.issueCount = payload.issues.filter((i) => i.status === 'open').length
+  return toQcAnnotations(extra)
+}
+/** 交付列表摘要 —— 由完整 LeRobot Mock 派生，保证与 pen/mouse 元信息一致 */
+export const datasets = lerobotDatasets.map(toDeliveryDataset)
