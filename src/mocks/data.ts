@@ -350,12 +350,11 @@ const defaultTags = [
   '调整台灯',
 ]
 
-function buildTags(count: number) {
-  const duration = 300
-  const span = duration / Math.max(count, 1)
+function buildTags(count: number, durationSec = 300) {
+  const span = durationSec / Math.max(count, 1)
   return Array.from({ length: count }, (_, i) => {
-    const start = Math.round(i * span * 10) / 10
-    const end = Math.min(duration, Math.round((start + span * 0.85) * 10) / 10)
+    const start = Math.round(i * span * 100) / 100
+    const end = Math.min(durationSec, Math.round((start + span * 0.85) * 100) / 100)
     return {
       id: `tag-${i + 1}`,
       label: defaultTags[i % defaultTags.length],
@@ -367,31 +366,44 @@ function buildTags(count: number) {
   })
 }
 
+/** 质量区间：按视频/会话总时长比例切三段 high → medium → high */
+function buildQualitySegments(durationSec: number): import('@/types').QcQualitySegment[] {
+  const a = Math.round(durationSec * 0.4 * 100) / 100
+  const b = Math.round(durationSec * 0.6 * 100) / 100
+  return [
+    { id: 'qs-1', startSec: 0, endSec: a, quality: 'high' },
+    { id: 'qs-2', startSec: a, endSec: b, quality: 'medium' },
+    { id: 'qs-3', startSec: b, endSec: durationSec, quality: 'high' },
+  ]
+}
+
+/**
+ * dr2 绑定 black_pen episode_000000：504 帧 / 30fps = 16.8s
+ * 时间轴与质量区间、Tag 均按该视频真实时长（接口侧写死对齐）
+ */
+const DR2_DURATION_SEC = 16.8
+
 export const qcDetailExtras: Record<string, import('@/types').QcDetailExtra> = {
   dr2: {
     inspector: '刘洋',
-    durationSec: 300,
+    durationSec: DR2_DURATION_SEC,
     fps: 30,
     lockKey: 'lock:qc:ST0611-0618-RAW-002',
-    tags: buildTags(13),
+    tags: buildTags(13, DR2_DURATION_SEC),
     issues: [
       {
         id: 'iss-1',
         code: 'hand_jitter',
         severity: 'medium',
         title: '手部 3D 关节抖动明显，建议人工复核',
-        frameStart: 3224,
-        frameEnd: 8626,
+        frameStart: 120,
+        frameEnd: 360,
         author: '赵敏',
         date: '07-12',
         status: 'ignored',
       },
     ],
-    qualitySegments: [
-      { id: 'qs-1', startSec: 0, endSec: 120, quality: 'high' },
-      { id: 'qs-2', startSec: 120, endSec: 180, quality: 'medium' },
-      { id: 'qs-3', startSec: 180, endSec: 300, quality: 'high' },
-    ],
+    qualitySegments: buildQualitySegments(DR2_DURATION_SEC),
     manualEdits: 1,
     lowConfidenceCount: 6,
   },
@@ -399,12 +411,13 @@ export const qcDetailExtras: Record<string, import('@/types').QcDetailExtra> = {
 
 export function getOrCreateQcDetailExtra(id: string, pkg: QcPackage): import('@/types').QcDetailExtra {
   if (qcDetailExtras[id]) return qcDetailExtras[id]
+  const durationSec = 300
   const extra: import('@/types').QcDetailExtra = {
     inspector: '刘洋',
-    durationSec: 300,
+    durationSec,
     fps: 30,
     lockKey: `lock:qc:${pkg.dataId}`,
-    tags: buildTags(pkg.tagCount),
+    tags: buildTags(pkg.tagCount, durationSec),
     issues:
       pkg.issueCount > 0
         ? [
@@ -421,7 +434,7 @@ export function getOrCreateQcDetailExtra(id: string, pkg: QcPackage): import('@/
             },
           ]
         : [],
-    qualitySegments: [{ id: `qs-${id}`, startSec: 0, endSec: 300, quality: 'high' }],
+    qualitySegments: buildQualitySegments(durationSec),
     manualEdits: 0,
     lowConfidenceCount: Math.max(0, Math.floor(pkg.tagCount / 2)),
   }

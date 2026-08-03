@@ -11,11 +11,13 @@ type Props = {
   videoWidth?: number
   videoHeight?: number
   currentSec: number
+  /** 视频实际时长；质检时间轴可能更长，播到头后停在末帧 */
+  mediaDuration?: number
   playing: boolean
   fps: number
   frames: HandPoseFrame[]
   stride?: number
-  /** 左目作时钟：timeupdate 回传时间，驱动整页同步 */
+  /** 左目作时钟：仅当视频时长≈时间轴时长时使用 */
   isClock?: boolean
   onClockTime?: (sec: number) => void
   onEnded?: () => void
@@ -29,6 +31,7 @@ export function QcCamStage({
   videoWidth = 640,
   videoHeight = 480,
   currentSec,
+  mediaDuration,
   playing,
   fps,
   frames,
@@ -43,28 +46,32 @@ export function QcCamStage({
   const videoRef = useRef<HTMLVideoElement>(null)
   const [mediaError, setMediaError] = useState<string | null>(null)
 
-  // 播放 / 暂停
+  const clampSec = (sec: number) => {
+    if (mediaDuration == null) return sec
+    return Math.min(Math.max(0, sec), Math.max(0, mediaDuration - 0.01))
+  }
+
+  // 播放 / 暂停：超过视频时长时暂停在末帧
   useEffect(() => {
     const v = videoRef.current
     if (!v || !videoUrl) return
-    if (playing) {
-      void v.play().catch(() => {
-        /* 自动播放策略或编解码失败时忽略 */
-      })
+    if (playing && (mediaDuration == null || currentSec < mediaDuration - 0.05)) {
+      void v.play().catch(() => {})
     } else {
       v.pause()
     }
-  }, [playing, videoUrl])
+  }, [playing, videoUrl, currentSec, mediaDuration])
 
-  // 非时钟路：跟随 currentSec；时钟路仅在暂停/拖动时强制 seek，避免和播放抢 currentTime
+  // 跟随 currentSec（时钟路播放中不抢 currentTime）
   useEffect(() => {
     const v = videoRef.current
     if (!v || !videoUrl) return
-    if (isClock && playing) return
-    if (Math.abs(v.currentTime - currentSec) > 0.08) {
-      v.currentTime = currentSec
+    if (isClock && playing && (mediaDuration == null || currentSec < mediaDuration - 0.05)) return
+    const target = clampSec(currentSec)
+    if (Math.abs(v.currentTime - target) > 0.08) {
+      v.currentTime = target
     }
-  }, [currentSec, videoUrl, isClock, playing])
+  }, [currentSec, videoUrl, isClock, playing, mediaDuration])
 
   return (
     <div

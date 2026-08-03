@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft,
-  ChevronRight,
   Pause,
   Play,
   Save,
@@ -17,10 +16,11 @@ import {
   getQcHandTrajectory,
   postQcReview,
 } from '@/api/client'
-import type { QcIssueStatus, QcQualitySegment } from '@/types'
+import type { QcIssueStatus, QcQualitySegment, QcTag } from '@/types'
 import { QcCamStage } from '@/components/QcCamStage'
+import { QcTimeline } from '@/components/QcTimeline'
 import { Badge, Card, EmptyState, LoadingBlock } from '@/components/ui'
-import { cn, statusLabel } from '@/lib/utils'
+import { statusLabel } from '@/lib/utils'
 import './QcDetailPage.scss'
 
 function dataStatusTone(status: string): 'info' | 'success' | 'warn' | 'neutral' {
@@ -40,7 +40,8 @@ function qualityLabel(q: 'high' | 'medium' | 'low') {
   return statusLabel[q]
 }
 
-function 5(sec: number) {
+/** 对标演示站：0.00s */
+function formatTime(sec: number) {
   return `${sec.toFixed(2)}s`
 }
 
@@ -63,16 +64,19 @@ export function QcDetailPage() {
   const { id = '' } = useParams()
   const queryClient = useQueryClient()
 
+  // 质检详情
   const detailQ = useQuery({
     queryKey: ['qc-detail', id],
     queryFn: () => getQcDetailInfos(id),
     enabled: Boolean(id),
   })
+  // 同步回放
   const playbackQ = useQuery({
     queryKey: ['qc-playback', id],
     queryFn: () => getQcPlayback(id),
     enabled: Boolean(id),
   })
+  // 手轨迹
   const trajQ = useQuery({
     queryKey: ['qc-hand-trajectory', id],
     queryFn: () =>
@@ -81,30 +85,35 @@ export function QcDetailPage() {
       }),
     enabled: Boolean(id) && Boolean(playbackQ.data),
   })
-
+  // 数据
   const pkg = detailQ.data?.detail.package
+  // 会话
   const session = detailQ.data?.detail.session
+  // 标注
   const annotations = detailQ.data?.annotations
+  // 同步回放
   const playback = playbackQ.data
+  // 手轨迹帧序列
   const handFrames = trajQ.data?.frames ?? []
+  // 手轨迹帧步进
   const trajStride = trajQ.data?.stride ?? playback?.handTrajectory.frameStride ?? 2
-
+  // 左目
   const leftCam = playback?.cameras.find((c) => c.role === 'rectified_left')
   const rightCam = playback?.cameras.find((c) => c.role === 'rectified_right')
-  const hasVideoClock = Boolean(leftCam?.url)
 
   const [currentSec, setCurrentSec] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [markFromSec, setMarkFromSec] = useState(0)
+  const [markFromSec, setMarkFromSec] = useState(120)
   const [segments, setSegments] = useState<QcQualitySegment[]>([])
+  const [tags, setTags] = useState<QcTag[]>([])
   const [overallQuality, setOverallQuality] = useState<'high' | 'medium' | 'low'>('high')
   const [issues, setIssues] = useState(annotations?.issues ?? [])
   const [savedTip, setSavedTip] = useState(false)
-  const timelineRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!annotations || !session) return
     setSegments(annotations.qualitySegments)
+    setTags(annotations.tags)
     setIssues(annotations.issues)
     setCurrentSec(0)
     setPlaying(false)
@@ -112,20 +121,24 @@ export function QcDetailPage() {
     setOverallQuality(majority)
   }, [annotations, session])
 
-  // 时长优先用 playback（绑定 LeRobot 后是真实 episode 时长）
+  /**
+   * 时间轴 = 实际视频时长（playback 优先）；
+   * 质量区间 / Tag = 接口 annotations，原样展示，前端不缩放。
+   */
   const duration = playback?.durationSec ?? session?.durationSec ?? 300
+  const mediaDuration = playback?.durationSec ?? duration
   const fps = playback?.fps ?? session?.fps ?? 30
   const videoW = leftCam?.width ?? rightCam?.width ?? 640
   const videoH = leftCam?.height ?? rightCam?.height ?? 480
   const frame = Math.min(Math.floor(currentSec * fps), Math.max(0, Math.floor(duration * fps) - 1))
+  const useVideoAsClock = Boolean(leftCam?.url)
 
   useEffect(() => {
-    setMarkFromSec(Math.min(120, Math.round(duration * 0.4 * 10) / 10))
+    setMarkFromSec(Math.round(Math.min(duration * 0.4, duration) * 100) / 100)
   }, [duration])
 
-  // 无视频时钟时用定时器推进；有视频时由左目 timeupdate 驱动
   useEffect(() => {
-    if (!playing || hasVideoClock) return
+    if (!playing || useVideoAsClock) return
     const timer = window.setInterval(() => {
       setCurrentSec((t) => {
         if (t >= duration) {
@@ -136,7 +149,7 @@ export function QcDetailPage() {
       })
     }, 1000 / fps)
     return () => window.clearInterval(timer)
-  }, [playing, duration, fps, hasVideoClock])
+  }, [playing, duration, fps, useVideoAsClock])
 
   const reviewM = useMutation({
     mutationFn: (decision: 'passed' | 'rejected') =>
@@ -170,14 +183,6 @@ export function QcDetailPage() {
 
   const undoLastSegment = () => {
     setSegments((prev) => prev.slice(0, -1))
-  }
-
-  const seekRatio = (clientX: number) => {
-    const el = timelineRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-    setCurrentSec(Math.round(ratio * duration * 100) / 100)
   }
 
   const handleSave = useCallback(() => {
@@ -230,14 +235,6 @@ export function QcDetailPage() {
     setIssues((prev) => prev.map((i) => (i.id === issueId ? { ...i, status } : i)))
   }
 
-  const ticks = useMemo(() => {
-    const step = duration <= 30 ? 5 : duration <= 120 ? 15 : 30
-    const list: number[] = []
-    for (let t = 0; t < duration; t += step) list.push(t)
-    list.push(Math.round(duration * 100) / 100)
-    return list
-  }, [duration])
-
   // 所有 hooks 必须在 early return 之前（Rules of Hooks）
   if (detailQ.isLoading || playbackQ.isLoading) return <LoadingBlock />
   if (!pkg || !session || !annotations) return <EmptyState text="未找到质检数据" />
@@ -286,11 +283,12 @@ export function QcDetailPage() {
               videoWidth={videoW}
               videoHeight={videoH}
               currentSec={currentSec}
+              mediaDuration={mediaDuration}
               playing={playing}
               fps={fps}
               frames={handFrames}
               stride={trajStride}
-              isClock
+              isClock={useVideoAsClock}
               onClockTime={(t) => setCurrentSec(Math.min(duration, Math.round(t * 100) / 100))}
               onEnded={() => {
                 setPlaying(false)
@@ -304,6 +302,7 @@ export function QcDetailPage() {
               videoWidth={videoW}
               videoHeight={videoH}
               currentSec={currentSec}
+              mediaDuration={mediaDuration}
               playing={playing}
               fps={fps}
               frames={handFrames}
@@ -323,17 +322,10 @@ export function QcDetailPage() {
             <button
               type="button"
               className="rounded-md p-1.5 hover:bg-white/5"
-              onClick={() => setCurrentSec(0)}
+              onClick={() => setCurrentSec((t) => Math.max(0, t - 1))}
               title="回开头"
             >
               <SkipBack className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="rounded-md p-1.5 hover:bg-white/5"
-              onClick={() => setCurrentSec((t) => Math.max(0, t - 1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -347,28 +339,14 @@ export function QcDetailPage() {
               className="rounded-md p-1.5 hover:bg-white/5"
               onClick={() => setCurrentSec((t) => Math.min(duration, t + 1))}
             >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="rounded-md p-1.5 hover:bg-white/5"
-              onClick={() => setCurrentSec(duration)}
-            >
               <SkipForward className="h-4 w-4" />
             </button>
             <div className="font-mono text-sm text-[var(--text-muted)]">
-              {formatTime(currentSec)} / {duration}s · Frame {frame}
+              {currentSec.toFixed(2)}s / {duration}s · Frame {frame}
             </div>
-            <button
-              type="button"
-              className="ml-auto rounded-md border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
-              onClick={() => setMarkFromSec(currentSec)}
-            >
-              标记起点 = 当前位置 ({formatTime(currentSec)})
-            </button>
           </div>
 
-          {/* 时间轴 */}
+          {/* 时间轴：对标 kimi /qc/dr2 —— 300s 刻度 + 质量色带 + 13 Tag */}
           <Card
             title="质量区间 + Tag 时间轴"
             extra={
@@ -377,64 +355,13 @@ export function QcDetailPage() {
               </span>
             }
           >
-            <div
-              ref={timelineRef}
-              className="relative cursor-pointer select-none"
-              onClick={(e) => seekRatio(e.clientX)}
-            >
-              {/* 刻度 */}
-              <div className="mb-1 flex justify-between text-[10px] text-[var(--text-muted)]">
-                {ticks.map((t) => (
-                  <span key={t}>{t}s</span>
-                ))}
-              </div>
-
-              {/* 质量层 */}
-              <div className="relative mb-2 h-4 overflow-hidden rounded bg-slate-800">
-                {segments.map((s) => (
-                  <div
-                    key={s.id}
-                    className="absolute top-0 h-full opacity-90"
-                    style={{
-                      left: `${(s.startSec / duration) * 100}%`,
-                      width: `${((s.endSec - s.startSec) / duration) * 100}%`,
-                      background: qualityColor(s.quality),
-                    }}
-                    title={`${qualityLabel(s.quality)} ${s.startSec}-${s.endSec}s`}
-                  />
-                ))}
-              </div>
-
-              {/* Tag 层 */}
-              <div className="relative h-10 overflow-hidden rounded bg-slate-900/80">
-                {annotations.tags.map((tag) => (
-                  <div
-                    key={tag.id}
-                    className={cn(
-                      'absolute top-1 flex h-8 items-center overflow-hidden rounded px-1 text-[10px] text-white',
-                      tag.confidence < 0.8 ? 'bg-amber-600/80' : 'bg-sky-600/80',
-                    )}
-                    style={{
-                      left: `${(tag.startSec / duration) * 100}%`,
-                      width: `${Math.max(2, ((tag.endSec - tag.startSec) / duration) * 100)}%`,
-                    }}
-                    title={`${tag.label} ${tag.startSec}-${tag.endSec}s · conf ${(tag.confidence * 100).toFixed(0)}%`}
-                  >
-                    <span className="truncate">{tag.label}</span>
-                  </div>
-                ))}
-                {/* 播放头 */}
-                <div
-                  className="absolute top-0 z-10 h-full w-0.5 bg-white shadow"
-                  style={{ left: `${(currentSec / duration) * 100}%` }}
-                />
-              </div>
-
-              <div className="mt-2 flex justify-between text-[11px] text-[var(--text-muted)]">
-                <span>0.0s 拖拽 Tag 块移动 · 拖拽边缘调整起止 · 点击空白处跳转</span>
-                <span>{duration}s</span>
-              </div>
-            </div>
+            <QcTimeline
+              duration={duration}
+              currentSec={currentSec}
+              segments={segments}
+              tags={tags}
+              onSeek={setCurrentSec}
+            />
           </Card>
 
           {/* 打标 + 结论 */}
@@ -613,7 +540,7 @@ export function QcDetailPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">Tag 数</span>
-                    <span>{annotations.tags.length}</span>
+                    <span>{tags.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">人工编辑</span>
