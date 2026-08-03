@@ -1,0 +1,15 @@
+---
+description: TypeScript and React coding standards
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript & React
+
+- Function components with named exports: `export function QcPage()`.
+- Import from `src/` via `@/` alias.
+- Pure types must use `import type`.
+- **Never use `any`**. Prefer domain types from `@/types`, explicit types, or `unknown` with narrowing.
+- Obey Rules of Hooks; do not call Hooks in conditions or loops.
+- Server state: TanStack Query. Local UI state: `useState` / `useMemo` — no global store unless requested.
+- Route params: `useParams()`. In-app links: `Link` / `NavLink`.

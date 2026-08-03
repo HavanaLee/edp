@@ -1,0 +1,13 @@
+---
+description: UI patterns, Tailwind, and shared components
+globs: src/pages/**,src/components/**
+alwaysApply: false
+---
+
+# UI
+
+- Tailwind utilities; colors via CSS vars in `src/index.css` (e.g. `var(--accent)`).
+- Prefer shared components from `@/components/ui`: `Card`, `KpiCard`, `Badge`, `ProgressBar`, `PageHeader`, `EmptyState`, `LoadingBlock`.
+- Conditional classes: `cn()` from `@/lib/utils`.
+- Stage/status labels and formatters live in `@/lib/utils` — do not duplicate across pages.
+- Keep the existing dark admin look and Chinese copy.

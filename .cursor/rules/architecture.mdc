@@ -1,0 +1,19 @@
+---
+description: EDP data-layer and architecture boundaries
+globs: src/**
+alwaysApply: false
+---
+
+# Architecture
+
+Data flow (non-negotiable):
+
+```text
+pages → TanStack Query → api/client.ts → mocks/data.ts
+```
+
+- Pages must not import `@/mocks/data` directly; use `@/api/client` only.
+- Queries: `useQuery`. Writes: `useMutation`, then `invalidateQueries`.
+- New data capability order: `types` → `mocks` → `api/client` → page.
+- Mock mutations are in-memory only; refresh resets state.
+- Do not assume a real backend is wired; `VITE_API_BASE` may exist but is unused until `api/client.ts` is changed.

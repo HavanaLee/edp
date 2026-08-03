@@ -1,0 +1,14 @@
+---
+description: Routing and sidebar navigation conventions
+globs: src/App.tsx,src/components/AppLayout.tsx,src/pages/**
+alwaysApply: false
+---
+
+# Routing & Navigation
+
+- Routes live in `src/App.tsx`; pages in `src/pages/`.
+- Sidebar items live in `src/components/AppLayout.tsx` `nav` array.
+- New navigable page: add page + route + sidebar item together.
+- Detail pages usually do not need a sidebar entry.
+- `/workers` route may be commented; `/datasets` may exist without a sidebar entry — do not assume they are visible in the UI.
+- Unmatched routes redirect to `/`.
