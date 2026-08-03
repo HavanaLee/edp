@@ -18,8 +18,8 @@
 
 | ID | localPath |
 |----|-----------|
-| `ds-pen` | `../black_pen_to_wooden_stand/lerobot_data` |
-| `ds-mouse` | `../black_mouse_to_wooden_stand/lerobot_data` |
+| `ds-pen` | `public/datasets/ds-pen` |
+| `ds-mouse` | `public/datasets/ds-mouse` |
 
 目录结构（两边对称，LeRobot v2.1）：
 
@@ -172,7 +172,7 @@ import { getDatasets, getDataset } from '@/api/client'
   "splits": { "train": "0:20" },
   "dataPathTemplate": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
   "videoPathTemplate": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
-  "localPath": "../black_pen_to_wooden_stand/lerobot_data",
+  "localPath": "public/datasets/ds-pen",
   "cameras": [
     {
       "key": "observation.images.cam_high",

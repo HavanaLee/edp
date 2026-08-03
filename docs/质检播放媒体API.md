@@ -115,7 +115,7 @@ const traj = await getQcHandTrajectory('dr2', {
     "datasetId": "ds-pen",
     "datasetName": "black_pen_to_wooden_stand",
     "episodeIndex": 0,
-    "localPath": "../black_pen_to_wooden_stand/lerobot_data"
+    "localPath": "public/datasets/ds-pen"
   }
 }
 ```

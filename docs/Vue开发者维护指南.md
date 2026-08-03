@@ -278,7 +278,7 @@ A: 本项目用 Tailwind 手写深色卡片。若要组件库，可后续加 Ant
 A: 可以，但成本等于重写。当前结构已按「api / mocks / pages」分层，迁移时按页搬运即可。
 
 **Q: 视频为什么播不了？**  
-A: 一期只展示 LeRobot 元信息。mp4 在仓库 `../black_*/lerobot_data/videos/`，二期再嵌播放器。
+A: 一期可播本地 Mock 视频：`public/datasets/ds-*/videos/...`（HTTP 路径 `/datasets/...`）。
 
 **Q: 质检点了通过刷新又没了？**  
 A: Mock 内存存储。接后端 `POST /qc/packages/:id/review` 后即持久。
