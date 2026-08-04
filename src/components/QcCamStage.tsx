@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { HandCanvas } from '@/components/HandCanvas'
 import { fitContain, useElementSize } from '@/hooks/useElementSize'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,8 @@ type Props = {
   stride?: number
   /** 左目作时钟：仅当视频时长≈时间轴时长时使用 */
   isClock?: boolean
+  /** 用户主动 seek 的递增版本；时钟路播放中也必须响应这个显式命令。 */
+  seekRevision?: number
   onClockTime?: (sec: number) => void
   onEnded?: () => void
   className?: string
@@ -37,6 +39,7 @@ export function QcCamStage({
   frames,
   stride = 2,
   isClock = false,
+  seekRevision = 0,
   onClockTime,
   onEnded,
   className,
@@ -44,12 +47,17 @@ export function QcCamStage({
   const [stageRef, stageSize] = useElementSize<HTMLDivElement>()
   const content = fitContain(stageSize.width, stageSize.height, videoWidth, videoHeight)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const appliedSeekRevisionRef = useRef<number | null>(null)
+  const pendingClockSeekRef = useRef<number | null>(null)
   const [mediaError, setMediaError] = useState<string | null>(null)
 
-  const clampSec = (sec: number) => {
-    if (mediaDuration == null) return sec
-    return Math.min(Math.max(0, sec), Math.max(0, mediaDuration - 0.01))
-  }
+  const clampSec = useCallback(
+    (sec: number) => {
+      if (mediaDuration == null) return sec
+      return Math.min(Math.max(0, sec), Math.max(0, mediaDuration - 0.01))
+    },
+    [mediaDuration],
+  )
 
   // 播放 / 暂停：超过视频时长时暂停在末帧
   useEffect(() => {
@@ -62,16 +70,30 @@ export function QcCamStage({
     }
   }, [playing, videoUrl, currentSec, mediaDuration])
 
-  // 跟随 currentSec（时钟路播放中不抢 currentTime）
+  /**
+   * 跟随页面时间：时钟路播放时只接受显式 seek，避免每次 timeupdate 都反写自身；
+   * 但显式 seek 必须强制写入 video.currentTime，不能被播放中的旧时间抢回。
+   */
   useEffect(() => {
     const v = videoRef.current
     if (!v || !videoUrl) return
-    if (isClock && playing && (mediaDuration == null || currentSec < mediaDuration - 0.05)) return
+    const isExplicitSeek = appliedSeekRevisionRef.current !== seekRevision
+    appliedSeekRevisionRef.current = seekRevision
+    if (
+      isClock &&
+      playing &&
+      !isExplicitSeek &&
+      (mediaDuration == null || currentSec < mediaDuration - 0.05)
+    ) {
+      return
+    }
     const target = clampSec(currentSec)
-    if (Math.abs(v.currentTime - target) > 0.08) {
+    const frameTolerance = Math.max(0.01, 1 / fps)
+    if (Math.abs(v.currentTime - target) > frameTolerance) {
+      if (isClock) pendingClockSeekRef.current = target
       v.currentTime = target
     }
-  }, [currentSec, videoUrl, isClock, playing, mediaDuration])
+  }, [currentSec, videoUrl, isClock, playing, clampSec, mediaDuration, fps, seekRevision])
 
   return (
     <div
@@ -98,15 +120,33 @@ export function QcCamStage({
             muted
             playsInline
             preload="auto"
-            onError={() =>
-              setMediaError('视频无法播放（路径或编解码器）。手轨迹仍可叠加显示。')
-            }
+            onError={() => setMediaError('视频无法播放（路径或编解码器）。手轨迹仍可叠加显示。')}
             onLoadedData={() => setMediaError(null)}
             onTimeUpdate={
               isClock
                 ? () => {
                     const v = videoRef.current
                     if (!v || !playing) return
+                    const pendingTarget = pendingClockSeekRef.current
+                    const frameTolerance = Math.max(0.01, 1 / fps)
+                    // seek 完成前忽略浏览器残留的旧 timeupdate，防止页面时钟被拉回旧位置。
+                    if (
+                      pendingTarget != null &&
+                      Math.abs(v.currentTime - pendingTarget) > frameTolerance
+                    ) {
+                      return
+                    }
+                    pendingClockSeekRef.current = null
+                    onClockTime?.(v.currentTime)
+                  }
+                : undefined
+            }
+            onSeeked={
+              isClock
+                ? () => {
+                    const v = videoRef.current
+                    if (!v || !playing) return
+                    pendingClockSeekRef.current = null
                     onClockTime?.(v.currentTime)
                   }
                 : undefined

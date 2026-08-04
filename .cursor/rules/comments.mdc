@@ -1,0 +1,42 @@
+---
+description: Require detailed comments on every code change
+alwaysApply: true
+---
+
+# 改动注释（强制）
+
+每次修改代码时，**必须**为本次改动补充详细注释，说明意图与关键逻辑，不能只改行为不留说明。
+
+## 要求
+
+- **新增**函数 / 组件 / 类型 / 模块：在定义处写清职责、入参含义、返回值或副作用。
+- **修改**已有逻辑：在改动点注释「为何改、改了什么、边界/约束」；勿只改代码不留痕迹。
+- **非显而易见**的分支、算法、Mock 约定、与后端/文档的契约差异：必须注释。
+- 注释用**中文**，与产品文案一致；写「为什么 / 约束」，避免复述代码字面意思。
+- 删除代码时：若留下调用方或兼容路径，注明删除原因或替代方案。
+
+## 示例
+
+```ts
+// ❌ BAD — 改了行为但无说明
+if (frameIndex >= frames.length) return null
+
+// ✅ GOOD
+// 播放越界时返回 null，避免尾帧重复渲染导致进度条卡在 100%
+if (frameIndex >= frames.length) return null
+```
+
+```ts
+/**
+ * 将质检时间轴秒数映射到相机帧索引。
+ * 注意：Mock 帧率固定 10fps，与真实采集帧率无关。
+ */
+export function timeToFrameIndex(seconds: number): number {
+  return Math.floor(seconds * 10)
+}
+```
+
+## 不做
+
+- 不为纯重命名、格式化、明显一行映射写废话注释。
+- 不把整段实现过程写进注释；保持简洁但信息完整。

@@ -1,13 +1,14 @@
 /**
  * 质检详情播放 Mock：三路视频清单 + 手部 21 点轨迹
  * - 视频路径优先绑定 LeRobot episode（与 black_* 对齐）
- * - 手轨迹：本地包无 HaMeR 产物，用确定性公式生成 prelabel_mock
+ * - 手轨迹：本地包无 HaMeR 产物，dr2 使用手工配置的逐相机 prelabel_mock 关键帧
  */
+import { qcHandTrajectoryKeyframes } from '@/mocks/qcHandTrajectory'
 import { findLerobotDataset } from '@/mocks/lerobotDatasets'
 import { getOrCreateQcDetailExtra, qcPackages } from '@/mocks/data'
 import type {
-  HandLandmark,
   HandPoseFrame,
+  QcHandTrajectoryCameraRole,
   HandTrajectoryQuery,
   HandTrajectoryResponse,
   QcCameraStream,
@@ -22,19 +23,6 @@ const mediaBindings: Record<string, { datasetId: string; episodeIndex: number }>
 }
 
 const LANDMARK_COUNT = 21
-
-function makeLandmark(t: number, handSign: number, i: number): HandLandmark {
-  const phase = t * 2.2 + i * 0.15 + handSign
-  return {
-    x: 0.35 + handSign * 0.18 + Math.sin(phase) * 0.04 + (i % 5) * 0.01,
-    y: 0.4 + Math.cos(phase * 0.9) * 0.08 + Math.floor(i / 5) * 0.03,
-    z: Math.sin(phase * 1.3) * 0.05,
-  }
-}
-
-function makeHand(t: number, handSign: number): HandLandmark[] {
-  return Array.from({ length: LANDMARK_COUNT }, (_, i) => makeLandmark(t, handSign, i))
-}
 
 function buildCameras(pkg: QcPackage, binding?: { datasetId: string; episodeIndex: number }): {
   cameras: QcCameraStream[]
@@ -145,6 +133,7 @@ export function buildQcPlaybackManifest(id: string): QcPlaybackManifest | null {
   const binding = mediaBindings[id]
   const built = buildCameras(pkg, binding)
   const stride = 2
+  const hasTrajectory = Boolean(qcHandTrajectoryKeyframes[id])
 
   return {
     packageId: id,
@@ -154,7 +143,7 @@ export function buildQcPlaybackManifest(id: string): QcPlaybackManifest | null {
     cameras: built.cameras,
     datasetRef: built.datasetRef,
     handTrajectory: {
-      source: 'prelabel_mock',
+      source: hasTrajectory ? 'prelabel_mock' : 'none',
       landmarkCount: LANDMARK_COUNT,
       hands: ['left', 'right'],
       frameStride: stride,
@@ -174,17 +163,22 @@ export function buildHandTrajectory(
   const stride = Math.max(1, query.stride ?? manifest.handTrajectory.frameStride)
   const startFrame = Math.max(0, query.startFrame ?? 0)
   const endFrame = Math.min(manifest.frameCount - 1, query.endFrame ?? manifest.frameCount - 1)
-  const frames: HandPoseFrame[] = []
+  const framesByCamera: Record<QcHandTrajectoryCameraRole, HandPoseFrame[]> = {
+    rectified_left: [],
+    rectified_right: [],
+  }
+  const keyframes = qcHandTrajectoryKeyframes[id]
 
-  for (let f = startFrame; f <= endFrame; f += stride) {
-    const timeSec = Math.round((f / manifest.fps) * 100) / 100
-    frames.push({
-      frameIndex: f,
-      timeSec,
-      left: makeHand(timeSec, -1),
-      right: makeHand(timeSec, 1),
-      confidence: 0.82 + ((f % 17) / 100),
-    })
+  if (keyframes) {
+    for (const role of Object.keys(framesByCamera) as QcHandTrajectoryCameraRole[]) {
+      framesByCamera[role] = keyframes[role]
+        .filter((frame) => frame.frameIndex >= startFrame && frame.frameIndex <= endFrame)
+        .map((frame) => ({
+          ...frame,
+          left: frame.left?.map((landmark) => ({ ...landmark })) ?? null,
+          right: frame.right?.map((landmark) => ({ ...landmark })) ?? null,
+        }))
+    }
   }
 
   return {
@@ -194,6 +188,6 @@ export function buildHandTrajectory(
     startFrame,
     endFrame,
     stride,
-    frames,
+    framesByCamera,
   }
 }

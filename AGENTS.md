@@ -70,6 +70,7 @@ pages → TanStack Query → api/client.ts → mocks/data.ts
 ## 修改与验证原则
 
 - 聚焦用户要求，不顺手重构无关代码。
+- **每次改动须补充详细注释**（意图、约束、非显而易见逻辑）；细则见 `.cursor/rules/comments.mdc`。
 - 禁止 `any`；优先复用现有组件与分层。
 - 不要把文档示例 API 当作已实现契约。
 - 修改完成后：

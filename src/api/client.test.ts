@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { getQcSummary, getSummary, retryJob, reviewQcPackage } from './client'
+import {
+  getQcHandTrajectory,
+  getQcPlayback,
+  getQcSummary,
+  getSummary,
+  retryJob,
+  reviewQcPackage,
+} from './client'
 import { jobs, qcPackages, summary } from '@/mocks/data'
 
 describe('api/client', () => {
@@ -13,6 +20,23 @@ describe('api/client', () => {
     const s = await getQcSummary()
     expect(s.pending + s.passed + s.rejected).toBe(qcPackages.length)
     expect(s.openIssues).toBeGreaterThanOrEqual(0)
+  })
+
+  it('returns independent, usable hand keyframes for each stereo camera', async () => {
+    const playback = await getQcPlayback('dr2')
+    const trajectory = await getQcHandTrajectory('dr2')
+    const leftFrame = trajectory?.framesByCamera.rectified_left[0]
+    const rightFrame = trajectory?.framesByCamera.rectified_right[0]
+
+    expect(playback?.handTrajectory.source).toBe('prelabel_mock')
+    expect(trajectory?.framesByCamera.rectified_left).toHaveLength(3)
+    expect(trajectory?.framesByCamera.rectified_right).toHaveLength(3)
+    expect(leftFrame?.frameIndex).toBe(rightFrame?.frameIndex)
+    expect(leftFrame?.left).toHaveLength(21)
+    expect(rightFrame?.right).toHaveLength(21)
+    expect(leftFrame?.left?.[0]?.x).not.toBe(rightFrame?.left?.[0]?.x)
+    expect(leftFrame?.right?.[0]?.x).not.toBe(rightFrame?.right?.[0]?.x)
+    expect(leftFrame?.left).not.toBe(rightFrame?.left)
   })
 
   it('reviewQcPackage updates package in memory', async () => {

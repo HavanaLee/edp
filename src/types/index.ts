@@ -264,6 +264,9 @@ export interface QcCameraStream {
   url: string
 }
 
+/** 可叠加二维手部关键点的相机画面 */
+export type QcHandTrajectoryCameraRole = 'rectified_left' | 'rectified_right'
+
 /** 单只手一个关键点（归一化或相机坐标系，见文档） */
 export interface HandLandmark {
   x: number
@@ -322,7 +325,11 @@ export interface HandTrajectoryResponse {
   startFrame: number
   endFrame: number
   stride: number
-  frames: HandPoseFrame[]
+  /**
+   * 每路相机各自 rectified 图像坐标系中的归一化二维关键点。
+   * 同一只手在双目画面有视差，不能跨相机复用。
+   */
+  framesByCamera: Record<QcHandTrajectoryCameraRole, HandPoseFrame[]>
 }
 
 export interface DeliveryDataset {

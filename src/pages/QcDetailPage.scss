@@ -112,6 +112,7 @@
   position: relative;
   cursor: pointer;
   padding-bottom: 2px;
+  touch-action: none;
 }
 
 .qc-timeline__ticks {
@@ -160,6 +161,30 @@
   font-size: 10px;
   line-height: 1.2;
   box-sizing: border-box;
+  cursor: grab;
+  touch-action: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+/* 左右留出的命中区用于缩放，标签主体仍可直接拖动移动。 */
+.qc-timeline__tag-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+}
+
+.qc-timeline__tag-handle.is-start {
+  left: 0;
+  cursor: ew-resize;
+}
+
+.qc-timeline__tag-handle.is-end {
+  right: 0;
+  cursor: ew-resize;
 }
 
 .qc-timeline__tag.is-normal {
