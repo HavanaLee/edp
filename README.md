@@ -70,6 +70,23 @@ edp-web/
 
 页面组件一般 **不用改**。
 
+## GitHub Pages 部署
+
+推送到 `main` 后由 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) 自动构建并发布。
+
+首次启用：
+
+1. 仓库 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**
+2. 推送或手动运行 **Actions → Deploy → Run workflow**
+3. 站点地址：`https://havanalee.github.io/edp/`（与仓库名一致；`BASE_PATH=/edp/`）
+
+本地模拟 Pages 构建：
+
+```bash
+# Windows PowerShell
+$env:BASE_PATH='/edp/'; npm run build
+```
+
 ## 许可证
 
 内部演示工程，按需修改。

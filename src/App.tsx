@@ -19,10 +19,13 @@ const queryClient = new QueryClient({
   },
 })
 
+/** Vite BASE_URL 以 / 结尾；React Router basename 需要去掉末尾斜杠（根路径则为空串） */
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '')
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={routerBasename}>
         <Routes>
           <Route element={<AppLayout />}>
             <Route index element={<DashboardPage />} />

@@ -1,0 +1,56 @@
+# 推送到 main 后构建静态站点并发布到 GitHub Pages
+# 仓库 Settings → Pages → Source 需选「GitHub Actions」
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# 同一时刻只允许一个部署；取消排队中的旧部署，进行中的不中断
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        # 项目页路径为 /edp/，与仓库名一致；自定义域名时改为 /
+        run: npm run build
+        env:
+          BASE_PATH: /edp/
+
+      - name: SPA fallback for GitHub Pages
+        # Pages 对未知路径返回 404.html；复制 index 后深链与刷新可回到 SPA
+        run: cp dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
